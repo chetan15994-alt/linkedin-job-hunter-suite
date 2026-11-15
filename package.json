@@ -1,0 +1,36 @@
+{
+  "name": "linkedin-job-hunter-suite",
+  "version": "2.0.0",
+  "description": "Scrape, expand, and intelligently analyze LinkedIn hiring posts from Saved Items, Feed / For You, and curated Search Queries with resume matching.",
+  "type": "commonjs",
+  "bin": {
+    "linkedin-saved-posts": "src/index.js",
+    "linkedin-job-hunter": "src/index.js"
+  },
+  "scripts": {
+    "setup": "playwright install chromium",
+    "start": "node src/index.js",
+    "export": "node src/index.js",
+    "check": "node --check src/index.js",
+    "test": "node --test",
+    "verify": "npm run check && npm test"
+  },
+  "keywords": [
+    "linkedin",
+    "saved-posts",
+    "feed",
+    "search",
+    "playwright",
+    "product-management",
+    "job-hunt",
+    "hiring-analysis",
+    "resume-matching"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "playwright": "^1.58.0"
+  }
+}

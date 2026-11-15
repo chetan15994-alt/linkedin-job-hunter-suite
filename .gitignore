@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Browser Profiles & Authentication Sessions
+.linkedin-playwright-profile/
+.playwright/
+
+# Generated Scraper Run Artifacts & Media
+linkedin-*.pdf
+linkedin-*.png
+linkedin-*.md
+linkedin-*-diagnostic.json
+parsed_posts.json
+
+# Operating System & Environment
+.DS_Store
+Thumbs.db
+.env
+.env.*
+*.log
+npm-debug.log*
+
+# Test Coverage
+coverage/
+.nyc_output/
