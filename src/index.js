@@ -6,6 +6,11 @@ const { stdin, stdout } = require('node:process');
 
 const { expand, scan } = require('./dom');
 const { SEARCH_QUERIES } = require('./queries');
+const {
+  GLOBAL_PM_QUERIES,
+  TARGET_COUNTRIES,
+  buildCountryQueries
+} = require('./international');
 const stealth = require('./stealth');
 const {
   analyzePosts,
@@ -117,6 +122,56 @@ async function promptMenu() {
       const budget = Number(args[2]) || 200;
       return { type: 'search', targetClicksPerQuery: budget, querySelection: qId, label: `Search Query #${qId} (${budget} clicks)`, slug: `search-q${qId}-${budget}clicks` };
     }
+
+    // Check if global / international / visa mode
+    if (firstArg === 'global' || firstArg === 'international' || firstArg === 'visa') {
+      const secondArg = args[1];
+      const thirdArg = args[2];
+      
+      // If secondArg is a number (e.g. `npm run export -- global 100`)
+      if (secondArg && /^\d+$/.test(secondArg)) {
+        const budget = Number(secondArg);
+        return {
+          type: 'global',
+          targetClicksPerQuery: budget,
+          queriesToRun: GLOBAL_PM_QUERIES,
+          label: `Global PM Job Hunter - 12 Regional Clusters (15 Countries, ${budget} clicks/query)`,
+          slug: `global-15countries-12clusters-${budget}clicks`
+        };
+      }
+      
+      // If secondArg is a country name or code
+      if (secondArg) {
+        const customQueries = buildCountryQueries(secondArg);
+        if (customQueries) {
+          const budget = Number(thirdArg) || 100;
+          const countryObj = TARGET_COUNTRIES.find(c =>
+            c.id.toLowerCase() === secondArg.toLowerCase() ||
+            c.name.toLowerCase().includes(secondArg.toLowerCase()) ||
+            c.keywords.some(k => k.toLowerCase() === secondArg.toLowerCase())
+          );
+          const cName = countryObj ? countryObj.name : secondArg;
+          const cSlug = countryObj ? countryObj.id.toLowerCase() : secondArg.toLowerCase();
+          return {
+            type: 'global',
+            targetClicksPerQuery: budget,
+            queriesToRun: customQueries,
+            label: `Global PM Job Hunter - ${cName} (${budget} clicks/query)`,
+            slug: `global-${cSlug}-${budget}clicks`
+          };
+        }
+      }
+      
+      // Default global: all 12 queries, default 100 clicks
+      const budget = 100;
+      return {
+        type: 'global',
+        targetClicksPerQuery: budget,
+        queriesToRun: GLOBAL_PM_QUERIES,
+        label: `Global PM Job Hunter - 12 Regional Clusters (15 Countries, ${budget} clicks/query)`,
+        slug: `global-15countries-12clusters-${budget}clicks`
+      };
+    }
     
     // Backwards compatible saved posts CLI: `npm run export -- saved 3 months` or `npm run export -- 3 months`
     const savedArgs = firstArg === 'saved' ? args.slice(1) : args;
@@ -124,7 +179,7 @@ async function promptMenu() {
     if (selection) {
       return { type: 'saved', selection, label: `Saved Posts (${selection.label})`, slug: `saved-${selection.slug}` };
     }
-    throw new Error('Invalid arguments. Usage: npm start, or npm run export -- [saved "3 months" | feed [clicks] | search [clicks]]');
+    throw new Error('Invalid arguments. Usage: npm start, or npm run export -- [saved "3 months" | feed [clicks] | search [clicks] | global [country] [clicks]]');
   }
 
   // Interactive CLI Menu
@@ -136,11 +191,12 @@ async function promptMenu() {
   console.log('  1. Export Saved Posts (from https://www.linkedin.com/my-items/saved-posts/)');
   console.log('  2. Scrape Feed / For You (from https://www.linkedin.com/feed/foryou/)');
   console.log('  3. Search LinkedIn Posts (across 10 curated PM/SPM hiring queries)');
+  console.log('  4. Global & Remote PM Job Hunter (15 Countries + Visa Sponsorship & Remote)');
   
   let mainChoice;
-  while (!['1', '2', '3'].includes(mainChoice)) {
-    mainChoice = (await reader.question('\nSelect 1, 2, or 3: ')).trim();
-    if (!['1', '2', '3'].includes(mainChoice)) console.log('Please enter 1, 2, or 3.');
+  while (!['1', '2', '3', '4'].includes(mainChoice)) {
+    mainChoice = (await reader.question('\nSelect 1, 2, 3, or 4: ')).trim();
+    if (!['1', '2', '3', '4'].includes(mainChoice)) console.log('Please enter 1, 2, 3, or 4.');
   }
 
   // Mode 2: Feed / For You
@@ -167,6 +223,56 @@ async function promptMenu() {
     const labelStr = selectedQ === 'all' ? `Search 10 Queries (${budget} clicks/query)` : `Search Query #${selectedQ} (${budget} clicks)`;
     const slugStr = selectedQ === 'all' ? `search-10queries-${budget}clicks` : `search-q${selectedQ}-${budget}clicks`;
     return { type: 'search', targetClicksPerQuery: budget, querySelection: selectedQ, label: labelStr, slug: slugStr };
+  }
+
+  // Mode 4: Global & Remote PM Job Hunter (15 Countries + Visa Sponsorship & Remote)
+  if (mainChoice === '4') {
+    const inputClicks = (await reader.question('\nEnter click limit per search query (default: 100): ')).trim();
+    const budget = Number(inputClicks) > 0 ? Number(inputClicks) : 100;
+
+    console.log('\nSelect Search Scope:');
+    console.log('  1. All 12 Regional & Global Clusters across all 15 countries (Recommended)');
+    console.log('  2. Single Country Drill-down (Select from 15 Target Countries)');
+
+    let scopeChoice = (await reader.question('\nSelect 1 or 2 [default: 1]: ')).trim();
+    if (scopeChoice === '2') {
+      console.log('\nSupported Target Countries:');
+      TARGET_COUNTRIES.forEach((c, idx) => console.log(`  ${idx + 1}. ${c.name} [${c.id}] - ${c.region}`));
+      const countryInput = (await reader.question('\nEnter country number (1-15) or name/code: ')).trim();
+      let selectedCountry = null;
+      const num = Number(countryInput);
+      if (num >= 1 && num <= TARGET_COUNTRIES.length) {
+        selectedCountry = TARGET_COUNTRIES[num - 1];
+      } else if (countryInput) {
+        selectedCountry = TARGET_COUNTRIES.find(c =>
+          c.id.toLowerCase() === countryInput.toLowerCase() ||
+          c.name.toLowerCase().includes(countryInput.toLowerCase()) ||
+          c.keywords.some(k => k.toLowerCase() === countryInput.toLowerCase())
+        );
+      }
+
+      if (selectedCountry) {
+        const countryQueries = buildCountryQueries(selectedCountry.id);
+        reader.close();
+        return {
+          type: 'global',
+          targetClicksPerQuery: budget,
+          queriesToRun: countryQueries,
+          label: `Global PM Job Hunter - ${selectedCountry.name} (${budget} clicks/query)`,
+          slug: `global-${selectedCountry.id.toLowerCase()}-${budget}clicks`
+        };
+      }
+      console.log('Country not recognized, falling back to all 12 regional clusters.');
+    }
+
+    reader.close();
+    return {
+      type: 'global',
+      targetClicksPerQuery: budget,
+      queriesToRun: GLOBAL_PM_QUERIES,
+      label: `Global PM Job Hunter - 12 Regional Clusters (15 Countries, ${budget} clicks/query)`,
+      slug: `global-15countries-12clusters-${budget}clicks`
+    };
   }
 
   // Mode 1: Saved Posts
@@ -371,9 +477,9 @@ async function runFeedScraper(page, config) {
 
 async function runSearchScraper(page, config) {
   const clicksPerQuery = config.targetClicksPerQuery;
-  const queriesToRun = config.querySelection === 'all'
+  const queriesToRun = config.queriesToRun || (config.querySelection === 'all'
     ? SEARCH_QUERIES
-    : SEARCH_QUERIES.filter(q => q.id === config.querySelection);
+    : SEARCH_QUERIES.filter(q => q.id === config.querySelection));
 
   await ensureAuthenticated(page, 'https://www.linkedin.com/feed/');
 
@@ -482,7 +588,7 @@ async function main() {
   let scrapeResult;
   if (config.type === 'feed') {
     scrapeResult = await runFeedScraper(page, config);
-  } else if (config.type === 'search') {
+  } else if (config.type === 'search' || config.type === 'global') {
     scrapeResult = await runSearchScraper(page, config);
   } else {
     scrapeResult = await runSavedScraper(page, config);
@@ -554,5 +660,8 @@ module.exports = {
   parseAge,
   parseSelection,
   promptMenu,
-  SEARCH_QUERIES
+  SEARCH_QUERIES,
+  GLOBAL_PM_QUERIES,
+  TARGET_COUNTRIES,
+  buildCountryQueries
 };

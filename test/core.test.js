@@ -180,3 +180,104 @@ test('sanitizeChromeProfile handles missing or existing preferences cleanly', ()
   const res = stealth.sanitizeChromeProfile('/tmp/non-existent-profile-' + Date.now());
   assert.equal(res, true);
 });
+
+// ==================== International & Global PM Tests ====================
+
+const {
+  TARGET_COUNTRIES,
+  GLOBAL_PM_QUERIES,
+  buildCountryQueries,
+  detectCountry,
+  detectWorkArrangement
+} = require('../src/international');
+
+test('all 15 target countries are properly defined with keywords and regions', () => {
+  assert.equal(TARGET_COUNTRIES.length, 15);
+  const expectedCodes = ['US', 'UK', 'CA', 'DE', 'SG', 'FR', 'ES', 'PL', 'AU', 'NL', 'IE', 'AE', 'CH', 'SE', 'SA'];
+  expectedCodes.forEach(code => {
+    const found = TARGET_COUNTRIES.find(c => c.id === code);
+    assert.ok(found, `Missing target country: ${code}`);
+    assert.ok(found.keywords.length >= 2, `Country ${code} lacks search keywords`);
+    assert.ok(found.region.length > 0, `Country ${code} lacks region`);
+  });
+});
+
+test('global PM search queries cover all 12 regional clusters with visa and remote focus', () => {
+  assert.equal(GLOBAL_PM_QUERIES.length, 12);
+  GLOBAL_PM_QUERIES.forEach(q => {
+    assert.ok(q.id >= 1 && q.id <= 12);
+    assert.ok(q.title.length > 5);
+    assert.ok(q.query.includes('hiring "Product Manager"'));
+    assert.ok(q.query.includes('email'));
+    assert.ok(q.targetResume.startsWith('Chetan_'));
+  });
+
+  const visaQueries = GLOBAL_PM_QUERIES.filter(q => q.focus.includes('Visa'));
+  const remoteQueries = GLOBAL_PM_QUERIES.filter(q => q.focus.includes('Remote'));
+  assert.ok(visaQueries.length >= 5, 'Must have at least 5 visa queries');
+  assert.ok(remoteQueries.length >= 5, 'Must have at least 5 remote queries');
+});
+
+test('buildCountryQueries generates 3 targeted queries for single country drill-down', () => {
+  const deQueries = buildCountryQueries('DE');
+  assert.ok(deQueries);
+  assert.equal(deQueries.length, 3);
+  assert.ok(deQueries[0].query.includes('Germany'));
+  assert.ok(deQueries[0].query.includes('visa'));
+  assert.ok(deQueries[1].query.includes('remote'));
+
+  const dubaiQueries = buildCountryQueries('dubai');
+  assert.ok(dubaiQueries);
+  assert.equal(dubaiQueries.length, 3);
+  assert.ok(dubaiQueries[0].query.includes('UAE') || dubaiQueries[0].query.includes('Dubai'));
+
+  const nonExistent = buildCountryQueries('atlantis');
+  assert.equal(nonExistent, null);
+});
+
+test('detectCountry accurately identifies countries and hubs from text', () => {
+  assert.equal(detectCountry('Join our Berlin office as Senior PM!'), 'Germany');
+  assert.equal(detectCountry('Hiring Product Manager in London or Manchester.'), 'United Kingdom');
+  assert.equal(detectCountry('Relocate to Dubai, UAE with full visa sponsorship.'), 'UAE (Dubai / Abu Dhabi)');
+  assert.equal(detectCountry('Looking for a PM in Singapore or Sydney'), 'Singapore, Australia');
+  assert.equal(detectCountry('100% worldwide remote opening for anywhere in the world'), 'Global Remote');
+  assert.equal(detectCountry('We are building something cool in stealth mode'), 'International / Unspecified');
+});
+
+test('detectWorkArrangement accurately identifies visa, relocation, remote, and hybrid', () => {
+  assert.equal(
+    detectWorkArrangement('We offer visa sponsorship and relocation support to Berlin.'),
+    'Visa Sponsored / Relocation'
+  );
+  assert.equal(
+    detectWorkArrangement('Fully remote role, work from anywhere in the world.'),
+    'Remote'
+  );
+  assert.equal(
+    detectWorkArrangement('Visa sponsored remote role with relocation assistance.'),
+    'Visa Sponsored / Relocation + Remote'
+  );
+  assert.equal(
+    detectWorkArrangement('Hybrid role in London 2 days in office.'),
+    'Hybrid'
+  );
+  assert.equal(
+    detectWorkArrangement('On-site position at our headquarters.'),
+    'On-site / Flexible'
+  );
+});
+
+test('analyzePosts enriches posts with country and work arrangement', () => {
+  const posts = [
+    {
+      author: 'Tech Recruiter',
+      text: 'Hiring Product Manager in Amsterdam, Netherlands! Visa sponsorship provided. Send CV to recruiter@amsterdam.nl',
+      age: '1d'
+    }
+  ];
+  const analyzed = analyzePosts(posts);
+  assert.equal(analyzed.length, 1);
+  assert.equal(analyzed[0].country, 'Netherlands');
+  assert.equal(analyzed[0].workArrangement, 'Visa Sponsored / Relocation');
+  assert.deepEqual(analyzed[0].emails, ['recruiter@amsterdam.nl']);
+});

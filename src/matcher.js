@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { detectCountry, detectWorkArrangement } = require('./international');
 
 const RESUME_VARIANTS = {
   AGENTIC: {
@@ -170,12 +171,16 @@ function analyzePosts(posts) {
     const role = detectRole(text);
     const company = detectCompany(text, post.author);
     const match = matchResume(text);
+    const country = detectCountry(text);
+    const workArrangement = detectWorkArrangement(text);
     
     results.push({
       postIndex: i + 1,
       author: post.author || 'Unknown',
       company,
       role,
+      country,
+      workArrangement,
       emails,
       url: post.url || '',
       age: post.age || 'Recent',
@@ -221,8 +226,8 @@ function generateAnalysisReport(analysisResults, sourceLabel) {
   md += `**Direct Email Outreach Opportunities**: ${withEmails.length}\n\n`;
   
   md += `## 1. Consolidated Direct Recruiter Email Outreach Opportunities (${withEmails.length})\n\n`;
-  md += `| # | Company | Role | Recruiter Email | Best Resume Variant | Post Date / Age | Category / Status | Why Chetan Fits |\n`;
-  md += `|:---:|---|---|---|---|:---:|:---:|---|\n`;
+  md += `| # | Company | Role | Target Country / Region | Work Model / Visa | Recruiter Email | Best Resume Variant | Post Date / Age | Category / Status | Why Chetan Fits |\n`;
+  md += `|:---:|---|---|---|---|---|---|:---:|:---:|---|\n`;
   
   withEmails.forEach((r, idx) => {
     const emailsStr = r.emails.map(e => `\`${e}\``).join(', ');
@@ -230,18 +235,22 @@ function generateAnalysisReport(analysisResults, sourceLabel) {
     const status = isPrev ? 'Duplicate / Fetched earlier' : 'Fresh Opportunity';
     const comp = (r.company || 'Tech Company').replace(/[\r\n|]+/g, ' ').trim();
     const role = (r.role || 'Product Manager').replace(/[\r\n|]+/g, ' ').trim();
+    const country = (r.country || 'Global / Unspecified').replace(/[\r\n|]+/g, ' ').trim();
+    const work = (r.workArrangement || 'Flexible').replace(/[\r\n|]+/g, ' ').trim();
     const age = (r.age || 'Recent').replace(/[\r\n|]+/g, ' ').trim();
     const rationale = (r.fitRationale || '').replace(/[\r\n|]+/g, ' ').trim();
-    md += `| **${idx + 1}** | **${comp}** | ${role} | ${emailsStr} | \`${r.bestResume}\` | ${age} | **${status}** | ${rationale} |\n`;
+    md += `| **${idx + 1}** | **${comp}** | ${role} | ${country} | ${work} | ${emailsStr} | \`${r.bestResume}\` | ${age} | **${status}** | ${rationale} |\n`;
   });
   
   if (otherHiring.length > 0) {
     md += `\n## 2. Other Key Hiring Openings (${otherHiring.length})\n\n`;
-    md += `| # | Company | Role | Age | Best Resume Variant | Link / Source |\n`;
+    md += `| # | Company | Role | Target Country | Work Model / Visa | Age | Best Resume Variant | Link / Source |\n`;
     md += `|:---:|---|---|---|---|:---:|---|---|\n`;
     otherHiring.slice(0, 40).forEach((r, idx) => {
       const linkStr = r.url ? `[LinkedIn Post](${r.url})` : 'LinkedIn Search / Feed';
-      md += `| **${idx + 1}** | **${r.company}** | ${r.role} | ${r.age} | \`${r.bestResume}\` | ${linkStr} |\n`;
+      const country = (r.country || 'Global / Unspecified').replace(/[\r\n|]+/g, ' ').trim();
+      const work = (r.workArrangement || 'Flexible').replace(/[\r\n|]+/g, ' ').trim();
+      md += `| **${idx + 1}** | **${r.company}** | ${r.role} | ${country} | ${work} | ${r.age} | \`${r.bestResume}\` | ${linkStr} |\n`;
     });
   }
   
@@ -258,7 +267,7 @@ function printConsoleSummaryTable(analysisResults) {
   withEmails.forEach((r, idx) => {
     const isPrev = r.emails.some(e => previouslySeen.has(e.toLowerCase().trim()));
     const status = isPrev ? '[DUPLICATE / FETCHED EARLIER]' : '[FRESH OPPORTUNITY]';
-    console.log(`\n[#${idx + 1}] ${r.company} | ${r.role} | Post Age: ${r.age} ${status}`);
+    console.log(`\n[#${idx + 1}] ${r.company} | ${r.role} | ${r.country} (${r.workArrangement}) | Post Age: ${r.age} ${status}`);
     console.log(`    📧 Contact: ${r.emails.join(', ')}`);
     console.log(`    📄 Resume:  ${r.bestResume} (${r.resumeTitle})`);
     console.log(`    💡 Pitch:   ${r.fitRationale}`);
