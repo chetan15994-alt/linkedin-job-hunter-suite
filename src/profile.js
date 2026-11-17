@@ -342,21 +342,21 @@ function answerCustomQuestion(questionText = '', jobContext = {}) {
 
   // 9. Challenging Engineering Situation / Conflict Resolution / Failure
   if (/obstacle|conflict|failure|disagreement|difficult coworker/i.test(q)) {
-    return `When scaling our core analytics pipeline, engineering hit severe latency bottlenecks threatening our enterprise SLAs. Instead of debating in silos, I convened a 48-hour war room, benchmarked query patterns directly against user session telemetry, and proposed a hybrid caching architecture that cut response times by 72% while reducing infrastructure costs by 28%. I focus on uniting engineering depth with customer reality to deliver decisive solutions.`;
+    return `At Indegene, when scaling our real-time LLM evaluation pipeline, our agent trace auditing faced severe latency bottlenecks that jeopardized enterprise SLAs. Rather than debating in silos, I led an engineering spike across our backend and AI squads, analyzed query telemetry across 500+ production traces, and architected an asynchronous tiered caching and batched evaluation framework. This reduced latency by 68% while maintaining an 85% human agreement score.`;
   }
 
   // 10. Product Philosophy, Strategy & Prioritization
   if (/prioriti(ze|zation)|framework|strategy|roadmap|decide what to build/i.test(q)) {
-    return `I balance quantitative data (retention funnels, unit economics, latency telemetry) with deep customer qualitative insights. I use structured frameworks like RICE and Opportunity Solution Trees to validate high-conviction hypotheses rapidly. My north star is always customer time-to-value and durable platform revenue.`;
+    return `At Indegene and Datawrkz, I rooted prioritization in high-signal customer telemetry and clear business leverage. Using structured frameworks like RICE and Opportunity Solution Trees, I balance 0-to-1 discovery spikes with scalable platform engineering. My guiding principle is shortening customer time-to-value while de-risking technical execution early.`;
   }
 
   // 11. Overcoming Potential Blockers or Unfamiliar Technologies Positively
   if (/experience with|background in|familiar with/i.test(q)) {
-    return `Throughout my 6.5+ years across B2B SaaS, enterprise AI, and high-scale consumer tech, I have consistently mastered new technical paradigms, APIs, and domain stacks within days. My strength lies in grasping underlying system architectures, translating business requirements into robust product specs, and driving immediate execution without missing a beat.`;
+    return `At Indegene and Datawrkz, I repeatedly mastered complex emerging domains, from enterprise AI agent orchestration and LLM evaluation rubrics to high-throughput programmatic ad exchanges. My strength is rapidly deconstructing architectural stacks, translating business and user needs into crisp product specs, and executing with high ownership to ship production-ready platforms immediately.`;
   }
 
   // 12. General Comprehensive Fallback
-  return `With 6.5+ years of PM leadership, an MBA from IIM Kashipur, and a B.Arch from NIT Patna, I combine analytical rigor, design intuition, and commercial execution. Having scaled 0-to-1 platforms to hundreds of enterprise clients and engineered enterprise AI agent systems, I bring energy, strategic clarity, and dependable delivery to your product team.`;
+  return `As Founding PM at Indegene and previously at Datawrkz, I bring deep hands-on experience building 0-to-1 B2B platforms, enterprise AI agent workflows, and scalable data products. With an MBA from IIM Kashipur and a B.Arch from NIT Patna, I combine high-velocity execution, technical depth, and strong commercial focus.`;
 }
 
 module.exports = {

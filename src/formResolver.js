@@ -114,18 +114,39 @@ function classifyField(field) {
     return FIELD_TYPES.PHONE;
   }
 
+  // Dedicated check for Textarea narrative responses
+  if (field.tagName === 'textarea') {
+    if (/cover\s*letter|note\s*to\s*(hiring\s*manager|recruiter)|additional\s*info/i.test(combined)) {
+      return FIELD_TYPES.COVER_LETTER_TEXT;
+    }
+    if (/salary|compensation|ctc|remuneration|pay\s*expectation|rupees|inr/i.test(combined)) {
+      return FIELD_TYPES.SALARY_EXPECTATION;
+    }
+    if (/notice\s*period|availability|how\s*soon/i.test(combined)) {
+      return FIELD_TYPES.NOTICE_PERIOD;
+    }
+    if (/relocat(e|ion)|cities|city/i.test(combined)) {
+      return FIELD_TYPES.RELOCATION;
+    }
+    return FIELD_TYPES.CUSTOM_QUESTION;
+  }
+
   // 6. Social and Profile URLs
   if (/linkedin/i.test(combined)) return FIELD_TYPES.LINKEDIN_URL;
   if (/github/i.test(combined)) return FIELD_TYPES.GITHUB_URL;
-  if (/portfolio/i.test(combined)) return FIELD_TYPES.PORTFOLIO_URL;
+  if (/\bportfolio\b/i.test(combined) && !/program|lead|manage|product\s*portfolio|portfolio\s*you\s*led/i.test(combined)) {
+    return FIELD_TYPES.PORTFOLIO_URL;
+  }
   if (/website|personal\s*url|other\s*website|blog/i.test(combined)) return FIELD_TYPES.WEBSITE_URL;
 
   // 7. Location fields
-  if (/\b(city|town)\b/i.test(combined) && !/ethnicity/i.test(combined)) return FIELD_TYPES.LOCATION_CITY;
-  if (/\b(state|province|region)\b/i.test(combined)) return FIELD_TYPES.LOCATION_STATE;
+  if (/\b(city|town)\b/i.test(combined) && !/ethnicity|relocat/i.test(combined)) return FIELD_TYPES.LOCATION_CITY;
+  if (/\b(state|province|region)\b/i.test(combined) && !/please\s*state|state\s*or\s*national|state\s*your/i.test(combined)) {
+    return FIELD_TYPES.LOCATION_STATE;
+  }
   if (/\b(postal\s*code|zip(\s*code)?|pincode)\b/i.test(combined)) return FIELD_TYPES.LOCATION_POSTAL;
   if (/\b(country)\b/i.test(combined) && !/code/i.test(combined)) return FIELD_TYPES.LOCATION_COUNTRY;
-  if (/\b(location|address|residence|current\s*location)\b/i.test(combined)) return FIELD_TYPES.LOCATION_FULL;
+  if (/\b(location|address|residence|current\s*location)\b/i.test(combined) && !/relocat|relocation/i.test(combined)) return FIELD_TYPES.LOCATION_FULL;
 
   // 8. Current Employment & Experience
   if (/current\s*(company|employer)|most\s*recent\s*(company|employer)/i.test(combined)) return FIELD_TYPES.CURRENT_COMPANY;

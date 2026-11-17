@@ -170,6 +170,16 @@ function findElementLocator(frame, field) {
  */
 async function fillTextInput(locator, textValue, field) {
   await locator.scrollIntoViewIfNeeded({ timeout: 4000 }).catch(() => {});
+
+  if (field.tagName === 'select' || field.type === 'select') {
+    const valSuccess = await locator.selectOption({ label: String(textValue) }, { timeout: 3000 }).catch(() => null);
+    if (!valSuccess) {
+      await locator.selectOption({ value: String(textValue) }, { timeout: 3000 }).catch(() => null);
+    }
+    await locator.dispatchEvent('change').catch(() => {});
+    return;
+  }
+
   await locator.click({ timeout: 4000 }).catch(() => {});
   await locator.fill(String(textValue), { timeout: 4000 });
   
