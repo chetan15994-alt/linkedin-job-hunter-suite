@@ -11,6 +11,8 @@ linkedin-*.pdf
 linkedin-*.png
 linkedin-*.md
 linkedin-*-diagnostic.json
+job-application-*.png
+job-application-*.md
 parsed_posts.json
 
 # Operating System & Environment

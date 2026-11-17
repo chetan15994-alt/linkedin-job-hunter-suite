@@ -129,23 +129,39 @@ async function extractJobContext(page) {
  */
 async function ensureFormVisible(page) {
   try {
+    // 1. Direct Lever check: if on jobs.lever.co/<org>/<id> without /apply, append /apply
+    const curUrl = page.url();
+    if (/jobs\.lever\.co\/[^/]+\/[a-f0-9-]+$/i.test(curUrl.split('?')[0])) {
+      const applyUrl = curUrl.split('?')[0].replace(/\/$/, '') + '/apply';
+      await page.goto(applyUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+      await page.waitForTimeout(2000);
+      return true;
+    }
+
+    // 2. Check if a form is already visible on page
+    const hasVisibleForm = await page.evaluate(() => {
+      const inputs = document.querySelectorAll('input:not([type="hidden"]), textarea, select');
+      return inputs.length >= 3;
+    });
+
+    if (hasVisibleForm) return false;
+
+    // 3. Search for apply buttons or links
     const applyButton = page.locator('a, button, [role="button"]').filter({
-      hasText: /^(apply(\s+now|\s+for\s+this\s+job)?|submit\s+application)$/i
+      hasText: /apply(\s+now|\s+for\s+this\s+job)?|submit\s+application/i
     }).first();
 
     const count = await applyButton.count();
     if (count > 0 && await applyButton.isVisible()) {
-      // Check if a form is already visible on page
-      const hasVisibleForm = await page.evaluate(() => {
-        const inputs = document.querySelectorAll('input:not([type="hidden"]), textarea, select');
-        return inputs.length >= 3;
-      });
-
-      if (!hasVisibleForm) {
+      const href = await applyButton.getAttribute('href').catch(() => null);
+      if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
+        const targetUrl = new URL(href, page.url()).href;
+        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+      } else {
         await applyButton.click({ timeout: 4000 }).catch(() => {});
-        await page.waitForTimeout(1500);
-        return true;
       }
+      await page.waitForTimeout(2000);
+      return true;
     }
   } catch (e) {
     // Non-fatal
@@ -333,7 +349,20 @@ async function scanFrameFields(frame, frameIndex) {
 
     for (const [groupName, groupEls] of Object.entries(radioGroups)) {
       const first = groupEls[0];
-      const groupLabel = getLabelText(first) || groupName;
+      
+      // Look for parent question container title (Lever, Greenhouse, Ashby, Workday)
+      let groupLabel = '';
+      const questionContainer = first.closest('.application-question, .field, .form-group, fieldset, [class*="question"], [class*="field"], [role="group"]');
+      if (questionContainer) {
+        const titleEl = questionContainer.querySelector('.application-label, legend, .label, h3, h4, p, span[class*="label"], span[class*="title"]');
+        if (titleEl && titleEl.innerText && titleEl.innerText.trim().length > 3) {
+          groupLabel = titleEl.innerText.trim();
+        }
+      }
+      if (!groupLabel) {
+        groupLabel = getLabelText(first) || groupName;
+      }
+
       const isReq = groupEls.some(r => isElementRequired(r, groupLabel));
 
       const options = groupEls.map(r => {

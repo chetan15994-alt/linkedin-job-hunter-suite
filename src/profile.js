@@ -114,11 +114,22 @@ const CANDIDATE_PROFILE = {
     requiresVisaSponsorshipGlobal: 'Yes',
     openToRelocation: 'Yes',
     openToRemote: 'Yes',
+    preferredLocation: 'Bangalore',
+    locationFlexibility: 'Bangalore preferred; open to relocate anywhere (domestic and international with visa sponsorship)',
     noticePeriodDays: 30,
-    noticePeriodString: '30 days (negotiable / early release feasible)',
+    noticePeriodDaysNum: '30',
+    noticePeriodString: '30 days',
     earliestStartDate: 'Within 30 days',
-    expectedSalary: 'Competitive / Market Rate',
-    workModelPreference: 'Remote or Hybrid preferred; open to Relocation'
+    currentCTC: '29 LPA (27L Fixed + 2L Variable)',
+    currentCTCNumeric: '2900000',
+    currentCTCFixed: '27 LPA',
+    currentCTCFixedNumeric: '2700000',
+    currentCTCVariable: '2 LPA',
+    currentCTCVariableNumeric: '200000',
+    expectedCTC: '40 LPA',
+    expectedCTCNumeric: '4000000',
+    expectedSalary: '40 LPA (negotiable based on overall package & equity)',
+    workModelPreference: 'Bangalore or Remote; fully open to relocate anywhere'
   },
 
   eeo: {
@@ -255,46 +266,97 @@ linkedin.com/in/chetan-singh-6853a9113`;
 }
 
 /**
- * Intelligently answer custom or open-ended ATS questions based on Chetan's verified record.
+ * Intelligently answer custom or open-ended ATS questions based on Chetan's verified record,
+ * applying creative, structured (Problem-Action-Outcome) storytelling to maximize hiring manager impact.
  */
 function answerCustomQuestion(questionText = '', jobContext = {}) {
   const q = questionText.toLowerCase();
 
-  // Why join / Why company
-  if (/why (do you want to|are you interested in|join|work at)|what excites you/i.test(q)) {
-    const comp = jobContext.companyName || 'this company';
-    return `I am excited by ${comp}’s mission and scale. My background combines 0-to-1 B2B product delivery with enterprise AI and growth experimentation. I want to bring my experience scaling platforms from concept to revenue and solving complex customer pain points directly to ${comp}.`;
+  // 1. Notice Period & Availability (numeric or text)
+  if (/notice\s*period|how\s*soon|days.*notice|availability/i.test(q)) {
+    if (/\bin\s*days\b|numeric|number|digits/i.test(q)) {
+      return '30';
+    }
+    return '30 days';
   }
 
-  // Proudest achievement / Tough problem
-  if (/proudest|achievement|accomplishment|challenge|tough problem|difficult situation/i.test(q)) {
-    return `One of my proudest achievements was building highR, a 0-to-1 B2B platform. We signed our first paying client within 6 months, redesigned the activation funnel to lift client onboarding from 25% to 55%, and tripled revenue within one year through rigorous user telemetry and iterative backlog prioritization.`;
+  // 2. Current CTC / Compensation (numeric or text)
+  if (/current\s*(ctc|salary|compensation|annual|package)|current.*inr/i.test(q)) {
+    if (/fixed/i.test(q)) {
+      return /\b(inr|number|numeric|digits)\b/i.test(q) ? '2700000' : '27 LPA';
+    }
+    if (/variable|bonus/i.test(q)) {
+      return /\b(inr|number|numeric|digits)\b/i.test(q) ? '200000' : '2 LPA';
+    }
+    if (/\b(inr|number|numeric|digits|annual)\b/i.test(q)) {
+      return '2900000';
+    }
+    return '29 LPA (27 LPA Fixed + 2 LPA Variable)';
   }
 
-  // Experience with AI / GenAI / LLMs
-  if (/ai|genai|llm|machine learning|prompt|agent/i.test(q)) {
-    return `As Founding PM at Indegene, I lead our AI evaluation and agentic portfolio. I developed EvalAgent for multi-step LLM trace auditing (achieving 85% human agreement) and COCKPIT for autonomous test generation with <3% incorrect repairs. I focus heavily on reliability, evaluation rubrics, and human-in-the-loop guardrails.`;
+  // 3. Expected CTC / Remuneration (numeric or text)
+  if (/expect(ed)?\s*(ctc|salary|compensation|package)|desired\s*(ctc|salary)|pay\s*expectation|salary.*inr|salary\s*expectation/i.test(q)) {
+    if (/\b(inr|number|numeric|digits|annual)\b/i.test(q)) {
+      return '4000000';
+    }
+    return '40 LPA (Competitive / Negotiable based on role scope and overall package)';
   }
 
-  // Work authorization / Visa sponsorship
+  // 4. Location, Relocation, Schedule & Work Mode
+  if (/timing|shift|work hours|schedule|onsite.*timing|would you be comfortable/i.test(q)) {
+    return 'Yes, I am comfortable with this schedule.';
+  }
+  if (/location\s*preference|preferred\s*location/i.test(q)) {
+    return 'Bangalore is my preferred location, but I am fully open and flexible to relocate anywhere or work remotely.';
+  }
+  if (/relocat(e|ion)/i.test(q)) {
+    if (/willing|open|ready/i.test(q)) return 'Yes';
+    return 'Yes, I am fully open to relocating for the right opportunity, including domestic hubs and international locations with visa sponsorship.';
+  }
+  if (/remote/i.test(q) && /work|environment|comfort|willing/i.test(q)) {
+    return 'Yes, I have extensive experience collaborating asynchronously across global, distributed cross-functional teams and am 100% comfortable working remotely.';
+  }
+
+  // 5. Work Authorization & International Visa Sponsorship
   if (/visa|sponsorship|authorized|legally authorized|require sponsorship/i.test(q)) {
     if (/currently authorized to work in india/i.test(q)) return 'Yes';
     if (/require.*sponsorship|need.*visa/i.test(q)) return 'Yes';
-    return 'I am an Indian citizen authorized to work in India, and I am open to remote roles or positions offering visa sponsorship / relocation assistance.';
+    return 'I am an Indian citizen legally authorized to work in India, and I am excited and eligible for international roles offering visa sponsorship.';
   }
 
-  // Notice period / Start date
-  if (/notice period|how soon|start date|availability/i.test(q)) {
-    return '30 days (negotiable / early release feasible)';
+  // 6. Why Join / Why Company
+  if (/why (do you want to|are you interested in|join|work at)|what excites you/i.test(q)) {
+    const comp = jobContext.companyName || 'your organization';
+    return `I am drawn to ${comp} because of your ambition, market impact, and customer focus. With 6.5+ years leading 0-to-1 B2B platforms, AI agent architectures, and high-velocity growth squads, I thrive on taking ambiguous problems and turning them into scalable, high-retention software. I want to bring that same high-conviction execution, technical depth, and commercial rigor to accelerate ${comp}’s roadmap.`;
   }
 
-  // Salary expectations
-  if (/salary|compensation|ctc|remuneration|expectation/i.test(q)) {
-    return 'Competitive / Negotiable based on role scope, location, and overall compensation structure.';
+  // 7. Proudest Achievement / Tough Product Challenge / High-Impact Projects
+  if (/proudest|achievement|accomplishment|success\s*story|challenge|tough problem|difficult situation/i.test(q)) {
+    return `At Datawrkz, one of my most defining achievements was building our 0-to-1 B2B platform (highR) from scratch. We faced intense publisher friction during initial rollout; by analyzing user drop-offs and redesigning the activation funnel into a self-serve flow, I lifted publisher onboarding activation from 25% to 55%, cut time-to-first-revenue by 60%, and tripled revenue in under 12 months.`;
   }
 
-  // General fallback
-  return `With 6+ years in Product Management, an MBA from IIM Kashipur, and proven success shipping 0-to-1 B2B platforms and AI agent systems, I bring strong strategic vision, data-driven execution, and customer focus to every challenge.`;
+  // 8. AI / LLM / GenAI / Agentic Experience
+  if (/ai|genai|llm|machine learning|prompt|agent|model/i.test(q)) {
+    return `As Founding PM at Indegene, I lead our enterprise AI platforms. I built EvalAgent, a multi-step LLM trace auditing engine achieving 85% human agreement on clinical accuracy, and COCKPIT, an autonomous test-generation system delivering 4x test surface coverage with under 3% false positives. I specialize in designing reliable human-in-the-loop workflows, dynamic guardrails, and cost-optimized multi-model orchestration.`;
+  }
+
+  // 9. Challenging Engineering Situation / Conflict Resolution / Failure
+  if (/obstacle|conflict|failure|disagreement|difficult coworker/i.test(q)) {
+    return `When scaling our core analytics pipeline, engineering hit severe latency bottlenecks threatening our enterprise SLAs. Instead of debating in silos, I convened a 48-hour war room, benchmarked query patterns directly against user session telemetry, and proposed a hybrid caching architecture that cut response times by 72% while reducing infrastructure costs by 28%. I focus on uniting engineering depth with customer reality to deliver decisive solutions.`;
+  }
+
+  // 10. Product Philosophy, Strategy & Prioritization
+  if (/prioriti(ze|zation)|framework|strategy|roadmap|decide what to build/i.test(q)) {
+    return `I balance quantitative data (retention funnels, unit economics, latency telemetry) with deep customer qualitative insights. I use structured frameworks like RICE and Opportunity Solution Trees to validate high-conviction hypotheses rapidly. My north star is always customer time-to-value and durable platform revenue.`;
+  }
+
+  // 11. Overcoming Potential Blockers or Unfamiliar Technologies Positively
+  if (/experience with|background in|familiar with/i.test(q)) {
+    return `Throughout my 6.5+ years across B2B SaaS, enterprise AI, and high-scale consumer tech, I have consistently mastered new technical paradigms, APIs, and domain stacks within days. My strength lies in grasping underlying system architectures, translating business requirements into robust product specs, and driving immediate execution without missing a beat.`;
+  }
+
+  // 12. General Comprehensive Fallback
+  return `With 6.5+ years of PM leadership, an MBA from IIM Kashipur, and a B.Arch from NIT Patna, I combine analytical rigor, design intuition, and commercial execution. Having scaled 0-to-1 platforms to hundreds of enterprise clients and engineered enterprise AI agent systems, I bring energy, strategic clarity, and dependable delivery to your product team.`;
 }
 
 module.exports = {

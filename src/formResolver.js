@@ -30,6 +30,7 @@ const FIELD_TYPES = {
   CURRENT_COMPANY: 'CURRENT_COMPANY',
   CURRENT_TITLE: 'CURRENT_TITLE',
   YEARS_EXPERIENCE: 'YEARS_EXPERIENCE',
+  MONTHS_EXPERIENCE: 'MONTHS_EXPERIENCE',
   EDUCATION_SCHOOL: 'EDUCATION_SCHOOL',
   EDUCATION_DEGREE: 'EDUCATION_DEGREE',
   EDUCATION_MAJOR: 'EDUCATION_MAJOR',
@@ -40,6 +41,8 @@ const FIELD_TYPES = {
   REMOTE_WORK: 'REMOTE_WORK',
   NOTICE_PERIOD: 'NOTICE_PERIOD',
   START_DATE: 'START_DATE',
+  CURRENT_CTC: 'CURRENT_CTC',
+  EXPECTED_CTC: 'EXPECTED_CTC',
   SALARY_EXPECTATION: 'SALARY_EXPECTATION',
   EEO_GENDER: 'EEO_GENDER',
   EEO_VETERAN: 'EEO_VETERAN',
@@ -127,7 +130,8 @@ function classifyField(field) {
   // 8. Current Employment & Experience
   if (/current\s*(company|employer)|most\s*recent\s*(company|employer)/i.test(combined)) return FIELD_TYPES.CURRENT_COMPANY;
   if (/current\s*(title|role|position)|most\s*recent\s*(title|role)/i.test(combined)) return FIELD_TYPES.CURRENT_TITLE;
-  if (/(years\s*of\s*experience|total\s*experience|years\s*in\s*pm)/i.test(combined)) return FIELD_TYPES.YEARS_EXPERIENCE;
+  if (/months\s*of\s*(\w+\s*)?exp/i.test(combined)) return FIELD_TYPES.MONTHS_EXPERIENCE;
+  if (/(years\s*of\s*(\w+\s*)?exp|total\s*(\w+\s*)?exp|years\s*in\s*pm)/i.test(combined)) return FIELD_TYPES.YEARS_EXPERIENCE;
 
   // 9. Education
   if (/school|university|college|institution|alma\s*mater/i.test(combined)) return FIELD_TYPES.EDUCATION_SCHOOL;
@@ -145,9 +149,15 @@ function classifyField(field) {
   if (/relocat(e|ion)/i.test(combined)) return FIELD_TYPES.RELOCATION;
   if (/remote/i.test(combined) && /work|environment|willing/i.test(combined)) return FIELD_TYPES.REMOTE_WORK;
 
-  // 11. Logistics: Notice Period & Salary
+  // 11. Logistics: Notice Period & Salary / CTC
   if (/notice\s*period|availability|how\s*soon/i.test(combined)) return FIELD_TYPES.NOTICE_PERIOD;
   if (/start\s*date|available\s*date|earliest\s*start/i.test(combined)) return FIELD_TYPES.START_DATE;
+  if (/current\s*(ctc|salary|compensation|annual|fixed|variable|package)|current.*inr/i.test(combined)) {
+    return FIELD_TYPES.CURRENT_CTC;
+  }
+  if (/expect(ed)?\s*(ctc|salary|compensation|package)|desired\s*(ctc|salary)|pay\s*expectation|salary.*inr/i.test(combined)) {
+    return FIELD_TYPES.EXPECTED_CTC;
+  }
   if (/salary|compensation|ctc|remuneration|pay\s*expectation/i.test(combined)) return FIELD_TYPES.SALARY_EXPECTATION;
 
   // 12. Cover Letter
@@ -273,10 +283,17 @@ function resolveFieldValue(field, classification, jobContext = {}) {
 
     case FIELD_TYPES.YEARS_EXPERIENCE:
       if (field.options && field.options.length) {
-        const match = findBestOption(field.options, ['5-7', '5+', '6+', '5 to 7', '6', '5']);
+        const match = findBestOption(field.options, ['6 years', '6', '5-7', '5+', '6+', '5 to 7', '5']);
         return { action: 'select', selectedOption: match, rationale: '6+ years PM experience option' };
       }
       return { action: 'type', value: '6', rationale: '6+ years PM experience' };
+
+    case FIELD_TYPES.MONTHS_EXPERIENCE:
+      if (field.options && field.options.length) {
+        const match = findBestOption(field.options, ['6 months', '6', '0 month', '0']);
+        return { action: 'select', selectedOption: match, rationale: '6 months additional experience option' };
+      }
+      return { action: 'type', value: '6', rationale: '6 months additional experience' };
 
     case FIELD_TYPES.EDUCATION_SCHOOL:
       if (field.options && field.options.length) {
@@ -318,10 +335,10 @@ function resolveFieldValue(field, classification, jobContext = {}) {
 
     case FIELD_TYPES.RELOCATION:
       if (field.type === 'select' || field.type === 'radio_group') {
-        const match = findBestOption(field.options, ['yes', 'open to relocation', 'willing']);
+        const match = findBestOption(field.options, ['yes', 'open to relocation', 'willing', 'bangalore']);
         return { action: field.type === 'select' ? 'select' : 'radio', selectedOption: match, rationale: 'Open to relocation' };
       }
-      return { action: 'type', value: 'Yes', rationale: 'Open to relocation' };
+      return { action: 'type', value: 'Yes, fully open to relocate anywhere (Bangalore preferred)', rationale: 'Relocation flexibility' };
 
     case FIELD_TYPES.REMOTE_WORK:
       if (field.type === 'select' || field.type === 'radio_group') {
@@ -332,16 +349,41 @@ function resolveFieldValue(field, classification, jobContext = {}) {
 
     case FIELD_TYPES.NOTICE_PERIOD:
       if (field.type === 'select' || field.type === 'radio_group') {
-        const match = findBestOption(field.options, ['30 days', '1 month', 'immediate', 'less than 1 month', '15-30 days']);
+        const match = findBestOption(field.options, ['30 days', '1 month', '30', 'immediate', 'less than 1 month', '15-30 days']);
         return { action: field.type === 'select' ? 'select' : 'radio', selectedOption: match, rationale: '30 days notice period' };
       }
-      return { action: 'type', value: '30 days (negotiable / early release feasible)', rationale: 'Notice period' };
+      if (/\bin\s*days\b|numeric|digits|number/i.test(`${field.label} ${field.placeholder}`) || field.type === 'number') {
+        return { action: 'type', value: '30', rationale: 'Numeric notice period in days (30)' };
+      }
+      return { action: 'type', value: '30 days', rationale: 'Notice period: 30 days' };
+
+    case FIELD_TYPES.CURRENT_CTC:
+      if (/fixed/i.test(`${field.label} ${field.name}`)) {
+        const val = /\b(inr|numeric|digits|number|annual)\b/i.test(`${field.label} ${field.placeholder}`) || field.type === 'number' ? '2700000' : '27 LPA';
+        return { action: 'type', value: val, rationale: 'Current fixed compensation' };
+      }
+      if (/variable|bonus/i.test(`${field.label} ${field.name}`)) {
+        const val = /\b(inr|numeric|digits|number|annual)\b/i.test(`${field.label} ${field.placeholder}`) || field.type === 'number' ? '200000' : '2 LPA';
+        return { action: 'type', value: val, rationale: 'Current variable compensation' };
+      }
+      if (/\b(inr|numeric|digits|number|annual)\b/i.test(`${field.label} ${field.placeholder}`) || field.type === 'number') {
+        return { action: 'type', value: '2900000', rationale: 'Current annual compensation in INR (29 LPA)' };
+      }
+      return { action: 'type', value: '29 LPA (27L Fixed + 2L Variable)', rationale: 'Current CTC breakdown' };
+
+    case FIELD_TYPES.EXPECTED_CTC:
+    case FIELD_TYPES.SALARY_EXPECTATION:
+      if (field.type === 'select' || field.type === 'radio_group') {
+        const match = findBestOption(field.options, ['35-40', '40', '30-40', 'market rate', 'competitive']);
+        return { action: field.type === 'select' ? 'select' : 'radio', selectedOption: match, rationale: 'Expected CTC' };
+      }
+      if (/\b(inr|numeric|digits|number|annual)\b/i.test(`${field.label} ${field.placeholder}`) || field.type === 'number') {
+        return { action: 'type', value: '4000000', rationale: 'Expected annual compensation in INR (40 LPA)' };
+      }
+      return { action: 'type', value: '40 LPA', rationale: 'Expected CTC: 40 LPA' };
 
     case FIELD_TYPES.START_DATE:
       return { action: 'type', value: 'Within 30 days', rationale: 'Availability' };
-
-    case FIELD_TYPES.SALARY_EXPECTATION:
-      return { action: 'type', value: 'Competitive / Market Rate', rationale: 'Negotiable salary' };
 
     case FIELD_TYPES.EEO_GENDER:
       if (field.options && field.options.length) {
@@ -380,6 +422,15 @@ function resolveFieldValue(field, classification, jobContext = {}) {
 
     default:
       if (field.required) {
+        if (field.type === 'radio_group' && field.options && field.options.length) {
+          return { action: 'radio', selectedOption: field.options[0], rationale: 'Required radio selection fallback' };
+        }
+        if (field.type === 'select' && field.options && field.options.length) {
+          return { action: 'select', selectedOption: field.options[0], rationale: 'Required dropdown selection fallback' };
+        }
+        if (field.type === 'checkbox') {
+          return { action: 'check', value: true, rationale: 'Required checkbox agreement fallback' };
+        }
         // Fallback for required unknown text field
         return { action: 'type', value: 'N/A', rationale: 'Required field fallback' };
       }

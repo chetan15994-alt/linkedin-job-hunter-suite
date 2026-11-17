@@ -32,11 +32,24 @@ test('classifyField accurately identifies File Uploads', () => {
   assert.equal(classifyField({ label: 'Attach Cover Letter', name: 'cover_letter', type: 'file' }), FIELD_TYPES.COVER_LETTER_UPLOAD);
 });
 
-test('classifyField accurately identifies Work Authorization and Visa fields', () => {
+test('classifyField accurately identifies Work Authorization, Visa, Notice Period and CTC fields', () => {
   assert.equal(classifyField({ label: 'Will you now or in the future require visa sponsorship to work in the United States?', type: 'select' }), FIELD_TYPES.VISA_SPONSORSHIP);
   assert.equal(classifyField({ label: 'Are you legally authorized to work in India?', type: 'select' }), FIELD_TYPES.WORK_AUTHORIZATION);
   assert.equal(classifyField({ label: 'Are you open to relocation?', type: 'radio_group' }), FIELD_TYPES.RELOCATION);
   assert.equal(classifyField({ label: 'Are you willing to work in a remote environment?', type: 'radio_group' }), FIELD_TYPES.REMOTE_WORK);
+  assert.equal(classifyField({ label: 'Please enter your notice period in days*', type: 'text' }), FIELD_TYPES.NOTICE_PERIOD);
+  assert.equal(classifyField({ label: 'Please enter your current ctc in INR*', type: 'text' }), FIELD_TYPES.CURRENT_CTC);
+  assert.equal(classifyField({ label: 'What is your expected CTC in INR?', type: 'text' }), FIELD_TYPES.EXPECTED_CTC);
+
+  // Verify resolution
+  const resolvedNotice = resolveFieldValue({ label: 'Please enter your notice period in days*', type: 'text' }, FIELD_TYPES.NOTICE_PERIOD);
+  assert.equal(resolvedNotice.value, '30');
+
+  const resolvedCurrent = resolveFieldValue({ label: 'Please enter your current ctc in INR*', type: 'text' }, FIELD_TYPES.CURRENT_CTC);
+  assert.equal(resolvedCurrent.value, '2900000');
+
+  const resolvedExpected = resolveFieldValue({ label: 'What is your expected CTC in INR?', type: 'text' }, FIELD_TYPES.EXPECTED_CTC);
+  assert.equal(resolvedExpected.value, '4000000');
 });
 
 test('classifyField accurately identifies EEO and Custom fields', () => {
