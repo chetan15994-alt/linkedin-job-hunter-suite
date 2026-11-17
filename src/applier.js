@@ -5,6 +5,7 @@ const { resolveAllFields } = require('./formResolver');
 const { executeFillPlan } = require('./formFiller');
 const { CANDIDATE_PROFILE } = require('./profile');
 const { handleLinkedInEasyApply } = require('./linkedinEasyApply');
+const { defaultTracker, STATUS } = require('./applicationTracker');
 
 /**
  * Autonomous Job Application Pipeline Orchestrator (Phase 2)
@@ -58,6 +59,26 @@ async function applyToJob(page, jobUrl, options = {}) {
     const reportPath = `${reportPrefix}-report.md`;
     fs.writeFileSync(reportPath, reportMd);
     easyApplyResult.reportPath = reportPath;
+
+    // Record into application tracker
+    defaultTracker.record({
+      jobUrl,
+      role: easyApplyResult.jobTitle || 'Product Manager',
+      company: easyApplyResult.companyName || 'Not Detected',
+      recruiter: options.recruiter || 'Hiring Team',
+      portalType: 'LinkedIn Easy Apply',
+      matchedResume: easyApplyResult.targetResume ? easyApplyResult.targetResume.filename : null,
+      resumeCategory: easyApplyResult.targetResume ? easyApplyResult.targetResume.category : 'PM',
+      fieldsFilled: easyApplyResult.filledCount || 0,
+      totalFields: easyApplyResult.filledCount || 0,
+      status: easyApplyResult.submitted ? STATUS.SUBMITTED : STATUS.FILLED,
+      formFilledScreenshot: easyApplyResult.reviewScreenshotPath || (easyApplyResult.submitted ? null : easyApplyResult.screenshotPath),
+      submittedScreenshot: easyApplyResult.submitted ? easyApplyResult.screenshotPath : null,
+      challenges: 'None - Direct LinkedIn Easy Apply dialog modal traversed.',
+      notes: `${easyApplyResult.stepsCompleted} dialog steps traversed with Indegene and Datawrkz high-impact PM answers.`
+    });
+    defaultTracker.exportMarkdown();
+
     return easyApplyResult;
   }
 
@@ -69,6 +90,32 @@ async function applyToJob(page, jobUrl, options = {}) {
   console.log(`  Company: "${scanResult.companyName || 'Not detected'}"`);
   console.log(`  Interactive Fields Discovered: ${scanResult.fields.length}`);
   console.log(`  Submit Button Detected: ${scanResult.submitButton ? `Yes ("${scanResult.submitButton.text}")` : 'No'}`);
+
+  if (scanResult.isGated) {
+    console.warn(`\n🛑 GATED PORTAL DETECTED: ${scanResult.gateType}`);
+    console.warn(`   Reason: ${scanResult.gateReason}`);
+
+    defaultTracker.record({
+      jobUrl,
+      role: scanResult.jobTitle || 'Product Manager',
+      company: scanResult.companyName || 'Not Detected',
+      recruiter: options.recruiter || 'Hiring Team',
+      portalType: scanResult.portal || defaultTracker.detectPortalType(jobUrl),
+      status: scanResult.gateType,
+      challenges: scanResult.gateReason,
+      notes: `Gated portal detected (${scanResult.portal || 'Enterprise ATS'}). Account creation bypassed per instructions.`
+    });
+    defaultTracker.exportMarkdown();
+
+    return {
+      status: scanResult.gateType,
+      mode,
+      jobTitle: scanResult.jobTitle,
+      companyName: scanResult.companyName,
+      challenges: scanResult.gateReason,
+      reportPath: null
+    };
+  }
 
   if (!scanResult.hasForm) {
     throw new Error(`No job application form or input fields discovered at: ${jobUrl}`);
@@ -194,6 +241,25 @@ async function applyToJob(page, jobUrl, options = {}) {
   const reportPath = `${reportPrefix}-report.md`;
   fs.writeFileSync(reportPath, reportMd);
   console.log(`\nMaster Report written to: ${reportPath}`);
+
+  // 8. Record into Application Tracker
+  defaultTracker.record({
+    jobUrl,
+    role: scanResult.jobTitle || 'Product Manager',
+    company: scanResult.companyName || 'Not Detected',
+    recruiter: options.recruiter || 'Hiring Team',
+    portalType: defaultTracker.detectPortalType(jobUrl),
+    matchedResume: resolution.targetResume ? resolution.targetResume.filename : null,
+    resumeCategory: resolution.targetResume ? resolution.targetResume.category : 'PM',
+    fieldsFilled: execution.filledCount,
+    totalFields: scanResult.fields.length,
+    status: submitted ? STATUS.SUBMITTED : STATUS.FILLED,
+    formFilledScreenshot: screenshotPath,
+    submittedScreenshot: submissionScreenshot,
+    challenges: execution.failedCount > 0 ? `${execution.failedCount} fields failed to fill safely` : 'None',
+    notes: `${execution.filledCount} fields mapped and populated with Indegene AI & Datawrkz highR answers.`
+  });
+  defaultTracker.exportMarkdown();
 
   return {
     status: submitted ? 'SUBMITTED' : 'DRY_RUN_SUCCESS',

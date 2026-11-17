@@ -71,6 +71,10 @@ async function handleLinkedInEasyApply(page, options = {}) {
       console.log(`🎯 Final "Submit application" button reached!`);
 
       if (mode === 'live') {
+        const reviewScreenshot = `${options.reportPrefix || 'job-application'}-form-filled.png`;
+        await page.screenshot({ path: reviewScreenshot });
+        console.log(`  Pre-submission Review Screenshot Saved: ${reviewScreenshot}`);
+
         console.log(`🚀 LIVE MODE: Clicking "Submit application"...`);
         await submitBtn.scrollIntoViewIfNeeded().catch(() => {});
         await submitBtn.click({ timeout: 5000 });
@@ -95,6 +99,7 @@ async function handleLinkedInEasyApply(page, options = {}) {
           targetResume: matchedResume,
           filledCount: filledFieldsCount,
           submitted: true,
+          reviewScreenshotPath: reviewScreenshot,
           screenshotPath: confirmationScreenshot,
           stepsCompleted: currentStep,
           auditLog

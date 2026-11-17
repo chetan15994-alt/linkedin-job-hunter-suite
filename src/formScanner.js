@@ -23,6 +23,25 @@ async function scanPageForForm(page) {
   // 1. Extract job title, company, and job description for intelligent context
   const meta = await extractJobContext(page);
 
+  // 1.5 Check if page is gated by account creation or is a career index
+  const gateCheck = await detectGateOrIndex(page);
+  if (gateCheck.isGated) {
+    return {
+      hasForm: false,
+      isGated: true,
+      gateType: gateCheck.gateType,
+      gateReason: gateCheck.gateReason,
+      portal: gateCheck.portal,
+      pageTitle: meta.pageTitle,
+      jobTitle: meta.jobTitle,
+      companyName: meta.companyName,
+      jobDescription: meta.jobDescription,
+      fields: [],
+      applyButtonFound: false,
+      submitButton: null
+    };
+  }
+
   // 2. Check if an "Apply Now" button needs to be clicked to reveal or navigate to the form
   const applyButtonFound = await ensureFormVisible(page);
 
@@ -122,6 +141,80 @@ async function extractJobContext(page) {
 
     return { pageTitle, jobTitle, companyName, jobDescription };
   });
+}
+
+/**
+ * Detect if a page is gated behind candidate login or account creation,
+ * or is a generic multi-role career index hub rather than a direct form.
+ */
+async function detectGateOrIndex(page) {
+  try {
+    return await page.evaluate(() => {
+      const url = window.location.href.toLowerCase();
+      const bodyText = document.body ? document.body.innerText.toLowerCase() : '';
+
+      // 1. Workday Candidate Portal
+      if (url.includes('myworkdayjobs.com') || url.includes('.wd5.') || url.includes('.wd1.')) {
+        return {
+          isGated: true,
+          gateType: 'ACCOUNT_CREATION_REQUIRED',
+          gateReason: 'Workday candidate portal requires sign-in / account registration before accessing application form.',
+          portal: 'Workday'
+        };
+      }
+
+      // 2. Taleo Portal
+      if (url.includes('taleo.net')) {
+        return {
+          isGated: true,
+          gateType: 'ACCOUNT_CREATION_REQUIRED',
+          gateReason: 'Taleo enterprise portal requires candidate profile login / registration.',
+          portal: 'Taleo'
+        };
+      }
+
+      // 3. iCIMS Login Gate
+      if (url.includes('icims.com') && (url.includes('/login') || bodyText.includes('please create a profile'))) {
+        return {
+          isGated: true,
+          gateType: 'ACCOUNT_CREATION_REQUIRED',
+          gateReason: 'iCIMS candidate portal requires account creation to apply.',
+          portal: 'iCIMS'
+        };
+      }
+
+      // 4. Generic Account Creation / Sign-In Wall
+      const passwordInputs = document.querySelectorAll('input[type="password"]');
+      const hasApplicationFields = document.querySelectorAll('input[type="file"], input[name*="resume" i], textarea').length > 0;
+      
+      if (passwordInputs.length > 0 && !hasApplicationFields) {
+        if (bodyText.includes('create an account') || bodyText.includes('sign in to apply') || bodyText.includes('register to apply') || bodyText.includes('sign in or create')) {
+          return {
+            isGated: true,
+            gateType: 'ACCOUNT_CREATION_REQUIRED',
+            gateReason: 'Portal requires candidate registration / login before revealing application form.',
+            portal: 'Gated Career Portal'
+          };
+        }
+      }
+
+      // 5. Career Index / Directory Detection (no single job form, just directory/search)
+      const inputs = document.querySelectorAll('input:not([type="hidden"]), textarea, select');
+      const isSearchPage = bodyText.includes('search jobs') || bodyText.includes('all open positions') || bodyText.includes('view all jobs') || bodyText.includes('search openings');
+      if (inputs.length <= 1 && isSearchPage && !url.includes('/apply') && !url.includes('/job/')) {
+        return {
+          isGated: true,
+          gateType: 'CAREER_INDEX',
+          gateReason: 'Page is a multi-role career directory or search portal rather than a single job application form.',
+          portal: 'Career Index'
+        };
+      }
+
+      return { isGated: false };
+    });
+  } catch (err) {
+    return { isGated: false };
+  }
 }
 
 /**
@@ -483,6 +576,7 @@ async function locateSubmitButton(page) {
 
 module.exports = {
   scanPageForForm,
+  detectGateOrIndex,
   extractJobContext,
   ensureFormVisible,
   scanFrameFields,
