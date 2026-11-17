@@ -43,6 +43,7 @@ async function executeFillPlan(page, plan = [], options = {}) {
       continue;
     }
 
+    console.log(`    -> [${action}] ${field.label || field.name || field.id}`);
     const frame = frames[field.frameIndex] || page;
 
     try {
@@ -143,21 +144,38 @@ function escapeCss(str) {
   return str.replace(/([!"#$%&'()*+,.\/:;<=>?@[\\\]^`{|}~])/g, '\\$1');
 }
 
+function isDynamicId(id = '') {
+  if (!id) return true;
+  return /^(fabric|ember|react|jsx|radix|headlessui|mantine|mui|aria|_|f-)/i.test(id) ||
+         /field-\d+|select\d+|input-\d+|textfield-\d+/i.test(id);
+}
+
 /**
- * Locate element using robust cascading fallbacks.
+ * Locate element using robust cascading fallbacks, prioritizing stable names over dynamic IDs.
  */
 function findElementLocator(frame, field) {
-  if (field.id) {
-    return frame.locator(`#${escapeCss(field.id)}`);
-  }
-  if (field.name) {
+  // 1. Stable Name attribute
+  if (field.name && !isDynamicId(field.name)) {
     return frame.locator(`[name="${escapeCss(field.name)}"]`).first();
   }
+  // 2. Stable Non-dynamic ID
+  if (field.id && !isDynamicId(field.id)) {
+    return frame.locator(`#${escapeCss(field.id)}`).first();
+  }
+  // 3. Field Label
+  if (field.label) {
+    const cleanLabel = field.label.replace(/[*:\s]+$/, '').trim();
+    if (cleanLabel.length > 2) {
+      return frame.getByLabel(cleanLabel, { exact: false }).first();
+    }
+  }
+  // 4. Fallback to ID
+  if (field.id) {
+    return frame.locator(`#${escapeCss(field.id)}`).first();
+  }
+  // 5. Selector
   if (field.selector) {
     return frame.locator(field.selector).first();
-  }
-  if (field.label) {
-    return frame.getByLabel(field.label, { exact: false }).first();
   }
   if (field.placeholder) {
     return frame.getByPlaceholder(field.placeholder, { exact: false }).first();
@@ -169,19 +187,29 @@ function findElementLocator(frame, field) {
  * Fill text, email, phone, or textarea input.
  */
 async function fillTextInput(locator, textValue, field) {
-  await locator.scrollIntoViewIfNeeded({ timeout: 4000 }).catch(() => {});
+  await locator.scrollIntoViewIfNeeded({ timeout: 2500 }).catch(() => {});
 
   if (field.tagName === 'select' || field.type === 'select') {
-    const valSuccess = await locator.selectOption({ label: String(textValue) }, { timeout: 3000 }).catch(() => null);
-    if (!valSuccess) {
-      await locator.selectOption({ value: String(textValue) }, { timeout: 3000 }).catch(() => null);
-    }
-    await locator.dispatchEvent('change').catch(() => {});
+    await locator.evaluate((sel, targetText) => {
+      const lower = targetText.toLowerCase();
+      const options = Array.from(sel.options);
+      let match = options.find(o => o.text.trim().toLowerCase() === lower || o.value.toLowerCase() === lower);
+      if (!match) {
+        match = options.find(o => o.text.toLowerCase().includes(lower) || lower.includes(o.text.toLowerCase()));
+      }
+      if (match) {
+        sel.value = match.value;
+        sel.dispatchEvent(new Event('input', { bubbles: true }));
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      }
+      return false;
+    }, String(textValue)).catch(() => {});
     return;
   }
 
-  await locator.click({ timeout: 4000 }).catch(() => {});
-  await locator.fill(String(textValue), { timeout: 4000 });
+  await locator.click({ timeout: 2500 }).catch(() => {});
+  await locator.fill(String(textValue), { timeout: 2500 });
   
   // Fire change and blur events to trigger client validation (React/Vue/Ember)
   await locator.dispatchEvent('input').catch(() => {});
@@ -194,8 +222,9 @@ async function fillTextInput(locator, textValue, field) {
  * Handles both visible and hidden styled dropzones.
  */
 async function uploadFile(locator, filePath, field) {
-  // Playwright setInputFiles operates directly on file inputs regardless of CSS visibility
-  await locator.setInputFiles(filePath, { timeout: 8000 });
+  await locator.first().setInputFiles(filePath, { timeout: 5000 }).catch(async () => {
+    await locator.setInputFiles(filePath).catch(() => {});
+  });
 }
 
 /**
@@ -268,14 +297,17 @@ async function selectRadioButton(frame, groupLocator, selectedOption, field) {
  * Toggle or check checkbox.
  */
 async function toggleCheckbox(frame, locator, field) {
-  await locator.scrollIntoViewIfNeeded({ timeout: 4000 }).catch(() => {});
-  const isChecked = await locator.isChecked().catch(() => false);
+  await locator.first().scrollIntoViewIfNeeded({ timeout: 2500 }).catch(() => {});
+  const isChecked = await locator.first().evaluate(el => {
+    return el.checked === true || el.getAttribute('aria-checked') === 'true';
+  }).catch(() => false);
+
   if (!isChecked) {
-    const checked = await locator.check({ force: true, timeout: 3000 }).catch(() => false);
-    if (!checked && field.id) {
-      const label = frame.locator(`label[for="${escapeCss(field.id)}"]`);
+    const clicked = await locator.first().click({ force: true, timeout: 2500 }).catch(() => false);
+    if (!clicked && field.id) {
+      const label = frame.locator(`label[for="${escapeCss(field.id)}"]`).first();
       if (await label.count() > 0) {
-        await label.click({ timeout: 3000 }).catch(() => {});
+        await label.click({ timeout: 2000 }).catch(() => {});
       }
     }
   }

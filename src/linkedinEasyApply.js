@@ -234,10 +234,67 @@ async function handleLinkedInEasyApply(page, options = {}) {
       await nextBtn.click();
       await page.waitForTimeout(slowMo || 1500);
 
-      // Check if validation errors prevented advance
+      // Check if validation errors prevented advance and heal them immediately
       const errorEls = await dialog.locator('.artdeco-inline-feedback--error, [aria-invalid="true"]').allInnerTexts().catch(() => []);
       if (errorEls.length > 0) {
         console.warn(`⚠️ LinkedIn validation notices: ${errorEls.join('; ')}`);
+        
+        // Agentic inline healing for Easy Apply errors
+        const errorFeedbackEls = await dialog.locator('.artdeco-inline-feedback--error').all();
+        for (const errEl of errorFeedbackEls) {
+          try {
+            const parent = errEl.locator('xpath=..');
+            
+            // 1. Text / numeric / textarea input healing
+            const inp = parent.locator('input[type="text"], input[type="number"], textarea').first();
+            if (await inp.isVisible().catch(() => false)) {
+              const val = await inp.inputValue().catch(() => '');
+              if (!val || val.trim().length === 0) {
+                const label = await parent.innerText().catch(() => '');
+                if (/how\s*many\s*years|experience/i.test(label)) {
+                  await inp.fill('5').catch(() => {});
+                } else if (/notice/i.test(label)) {
+                  await inp.fill('30').catch(() => {});
+                } else if (/ctc|salary|compensation/i.test(label)) {
+                  await inp.fill('40 LPA').catch(() => {});
+                } else {
+                  await inp.fill('Yes').catch(() => {});
+                }
+                await inp.dispatchEvent('input').catch(() => {});
+                await inp.dispatchEvent('change').catch(() => {});
+              }
+            }
+
+            // 2. Dropdown healing
+            const sel = parent.locator('select').first();
+            if (await sel.isVisible().catch(() => false)) {
+              await sel.evaluate(s => {
+                const opts = Array.from(s.options).filter(o => o.value && o.value !== '' && !o.disabled);
+                if (opts.length > 0) {
+                  const match = opts.find(o => /yes/i.test(o.text)) || opts[opts.length - 1];
+                  s.value = match.value;
+                  s.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+              }).catch(() => {});
+            }
+
+            // 3. Radio button healing
+            const radios = parent.locator('input[type="radio"], [role="radio"]');
+            if (await radios.count() > 0) {
+              const yesRadio = parent.locator('label:has-text("Yes"), input[value="Yes"]').first();
+              if (await yesRadio.isVisible().catch(() => false)) {
+                await yesRadio.click().catch(() => {});
+              } else {
+                await radios.first().click().catch(() => {});
+              }
+            }
+          } catch (healErr) {}
+        }
+
+        // Retry clicking next after healing validation gaps
+        await page.waitForTimeout(500);
+        await nextBtn.click().catch(() => {});
+        await page.waitForTimeout(slowMo || 1500);
       }
     } else {
       console.warn('Neither Next nor Submit button found in modal.');

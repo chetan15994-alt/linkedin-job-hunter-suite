@@ -6,6 +6,7 @@ const { executeFillPlan } = require('./formFiller');
 const { CANDIDATE_PROFILE } = require('./profile');
 const { handleLinkedInEasyApply } = require('./linkedinEasyApply');
 const { defaultTracker, STATUS } = require('./applicationTracker');
+const { executeAutonomousSubmission } = require('./submissionEngine');
 
 /**
  * Autonomous Job Application Pipeline Orchestrator (Phase 2)
@@ -41,8 +42,13 @@ async function applyToJob(page, jobUrl, options = {}) {
   await page.goto(jobUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
   await page.waitForTimeout(3000);
 
+  // Check if LinkedIn job view
+  if (jobUrl.includes('linkedin.com/jobs/view/')) {
+    await page.waitForSelector('button:has-text("Easy Apply"), [aria-label*="Easy Apply"], button.jobs-apply-button', { timeout: 4000 }).catch(() => {});
+  }
+
   // Check if LinkedIn Easy Apply is present
-  const hasEasyApply = await page.locator('button:has-text("Easy Apply"), [aria-label*="Easy Apply"]').first().isVisible().catch(() => false);
+  const hasEasyApply = await page.locator('button:has-text("Easy Apply"), [aria-label*="Easy Apply"], button.jobs-apply-button:has-text("Easy Apply")').first().isVisible().catch(() => false);
   if (hasEasyApply) {
     console.log(`[LinkedIn Detected] Routing to specialized LinkedIn Easy Apply automation engine...`);
     const easyApplyResult = await handleLinkedInEasyApply(page, {
@@ -80,6 +86,39 @@ async function applyToJob(page, jobUrl, options = {}) {
     defaultTracker.exportMarkdown();
 
     return easyApplyResult;
+  }
+
+  // If on LinkedIn job page without Easy Apply, it's an external redirect
+  if (jobUrl.includes('linkedin.com/jobs/view/')) {
+    console.log(`[LinkedIn Job] External Apply detected (No Easy Apply button). Cataloging external redirect.`);
+    const meta = await page.evaluate(() => {
+      const t = document.querySelector('.job-details-jobs-unified-top-card__job-title, h1, [data-job-id]')?.innerText || document.title || 'Product Manager';
+      const c = document.querySelector('.job-details-jobs-unified-top-card__company-name, [class*="company-name"]')?.innerText || 'Employer';
+      return { title: t.replace(/\s*\|.*$/, '').trim(), company: c.trim() };
+    }).catch(() => ({ title: 'Product Manager', company: 'Employer' }));
+    const title = meta.title;
+    const company = meta.company;
+    
+    defaultTracker.record({
+      jobUrl,
+      role: title.trim(),
+      company: company.trim(),
+      recruiter: options.recruiter || 'Hiring Team',
+      portalType: 'LinkedIn External Apply',
+      status: STATUS.CAREER_INDEX,
+      challenges: 'External redirect link rather than inline Easy Apply form.',
+      notes: 'Posting directs candidates to external corporate portal.'
+    });
+    defaultTracker.exportMarkdown();
+
+    return {
+      status: STATUS.CAREER_INDEX,
+      mode,
+      jobTitle: title.trim(),
+      companyName: company.trim(),
+      challenges: 'External ATS redirect',
+      reportPath: null
+    };
   }
 
   // 2. Scan Page for Form Fields & Job Metadata
@@ -207,22 +246,13 @@ async function applyToJob(page, jobUrl, options = {}) {
   let submitted = false;
   let submissionScreenshot = null;
   if (mode === 'live') {
-    if (execution.failedCount > 0) {
-      console.error(`🛑 Live submission aborted: ${execution.failedCount} fields failed to fill safely.`);
-    } else if (!scanResult.submitButton) {
-      console.error(`🛑 Live submission aborted: Submit button could not be located.`);
-    } else {
-      console.log(`🚀 LIVE MODE: Clicking submit button ("${scanResult.submitButton.text}")...`);
-      const submitLoc = page.locator(scanResult.submitButton.selector).first();
-      await submitLoc.scrollIntoViewIfNeeded({ timeout: 4000 }).catch(() => {});
-      await submitLoc.click({ timeout: 5000 });
-      await page.waitForTimeout(5000);
-
-      submissionScreenshot = `${reportPrefix}-submitted.png`;
-      await page.screenshot({ path: submissionScreenshot, fullPage: true });
-      submitted = true;
-      console.log(`  Submission Complete! Confirmation Screenshot: ${submissionScreenshot}`);
-    }
+    const subResult = await executeAutonomousSubmission(page, {
+      reportPrefix,
+      maxRetries: 3,
+      jobContext
+    });
+    submitted = subResult.submitted;
+    submissionScreenshot = subResult.submittedScreenshot;
   } else {
     console.log(`\n🛡️ DRY-RUN MODE: Form successfully populated & verified. Submission button was NOT clicked.`);
   }

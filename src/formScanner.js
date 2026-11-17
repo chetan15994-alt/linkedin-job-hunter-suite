@@ -183,6 +183,16 @@ async function detectGateOrIndex(page) {
         };
       }
 
+      // 3.5 Google Sign-in Gate (for gated Google Forms)
+      if (url.includes('accounts.google.com') && (url.includes('signin') || bodyText.includes('sign in with your google account'))) {
+        return {
+          isGated: true,
+          gateType: 'LOGIN_REQUIRED',
+          gateReason: 'Google account sign-in required by form creator before accessing form.',
+          portal: 'Google Forms (Login Gated)'
+        };
+      }
+
       // 4. Generic Account Creation / Sign-In Wall
       const passwordInputs = document.querySelectorAll('input[type="password"]');
       const hasApplicationFields = document.querySelectorAll('input[type="file"], input[name*="resume" i], textarea').length > 0;
@@ -491,22 +501,26 @@ async function scanFrameFields(frame, frameIndex) {
       });
     }
 
-    // 5. Checkboxes (agreements, acknowledgements, certifications)
-    const checkboxes = Array.from(document.querySelectorAll('input[type="checkbox"]'));
+    // 5. Checkboxes (Native and ARIA, including Google Forms)
+    const checkboxes = Array.from(document.querySelectorAll('input[type="checkbox"], [role="checkbox"]'));
     for (const el of checkboxes) {
-      const label = getLabelText(el);
+      const ariaLabel = el.getAttribute('aria-label') || '';
+      const parentLabel = el.parentElement ? el.parentElement.innerText.trim() : '';
+      const label = ariaLabel || getLabelText(el) || parentLabel;
       const isReq = isElementRequired(el, label);
+      const isChecked = el.getAttribute('aria-checked') === 'true' || el.checked === true;
 
       results.push({
         frameIndex: fIndex,
-        tagName: 'input',
+        tagName: el.tagName.toLowerCase(),
         type: 'checkbox',
         id: el.id || '',
-        name: el.name || '',
+        name: el.getAttribute('name') || '',
+        ariaLabel,
         label,
         required: isReq,
-        checked: el.checked,
-        selector: el.id ? `#${el.id}` : (el.name ? `input[type="checkbox"][name="${el.name}"]` : null)
+        checked: isChecked,
+        selector: el.id ? `#${el.id}` : (el.getAttribute('aria-label') ? `[role="checkbox"][aria-label="${CSS.escape(ariaLabel)}"]` : (el.name ? `input[type="checkbox"][name="${el.name}"]` : null))
       });
     }
 

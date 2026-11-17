@@ -68,6 +68,11 @@ function classifyField(field) {
 
   const combined = `${label} ${name} ${id} ${placeholder} ${autocomplete}`;
 
+  // 0. Honeypot anti-spam fields (must NEVER be filled!)
+  if (/leave\s*(this\s*)?(field\s*)?blank|do\s*not\s*fill|honeypot/i.test(combined)) {
+    return FIELD_TYPES.UNKNOWN;
+  }
+
   // 1. File Uploads
   if (type === 'file') {
     if (/cover\s*letter/i.test(combined)) return FIELD_TYPES.COVER_LETTER_UPLOAD;
@@ -210,6 +215,12 @@ function classifyField(field) {
 function resolveFieldValue(field, classification, jobContext = {}) {
   const p = CANDIDATE_PROFILE;
   const targetResume = selectBestResume(jobContext.jobDescription || '', jobContext.jobTitle || '');
+
+  // Honeypot anti-spam check (must NEVER be filled)
+  const combinedLabel = `${field.label || ''} ${field.name || ''} ${field.id || ''}`.toLowerCase();
+  if (/leave\s*(this\s*)?(field\s*)?blank|do\s*not\s*fill|honeypot/i.test(combinedLabel)) {
+    return { action: 'skip', rationale: 'Honeypot anti-bot protection field - left blank' };
+  }
 
   switch (classification) {
     case FIELD_TYPES.FIRST_NAME:
@@ -438,6 +449,17 @@ function resolveFieldValue(field, classification, jobContext = {}) {
       return { action: 'check', value: true, rationale: 'Required applicant consent checkbox' };
 
     case FIELD_TYPES.CUSTOM_QUESTION:
+      if (field.type === 'checkbox') {
+        return { action: 'check', value: true, rationale: 'Agreement/consent checkbox' };
+      }
+      if (field.type === 'radio_group' && field.options && field.options.length) {
+        const affirmativeOpt = field.options.find(o => /yes|agree|true/i.test(o.text || o.value)) || field.options[0];
+        return { action: 'radio', selectedOption: affirmativeOpt, rationale: 'Affirmative radio selection' };
+      }
+      if (field.type === 'select' && field.options && field.options.length) {
+        const affirmativeOpt = field.options.find(o => /yes|agree|true/i.test(o.text || o.value)) || field.options[0];
+        return { action: 'select', selectedOption: affirmativeOpt, rationale: 'Affirmative dropdown selection' };
+      }
       const answer = answerCustomQuestion(field.label || field.placeholder || '', jobContext);
       return { action: 'type', value: answer, rationale: 'Intelligently generated custom PM response' };
 
