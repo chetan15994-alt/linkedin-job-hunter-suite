@@ -105,6 +105,31 @@ async function promptMenu() {
   if (args.length > 0) {
     const firstArg = args[0].toLowerCase();
     
+    // Check if apply mode (Phase 2): `npm run apply -- <url> [--mode=audit|dry-run|live] [--resume=<variant>]`
+    if (firstArg === 'apply') {
+      const url = args[1];
+      if (!url || !url.startsWith('http')) {
+        throw new Error('Please specify a valid job URL. Usage: node src/index.js apply <url> [--mode=audit|dry-run|live] [--resume=<variant>]');
+      }
+      let mode = 'dry-run';
+      let resumeOverride = null;
+      for (let i = 2; i < args.length; i++) {
+        const a = args[i];
+        if (a.startsWith('--mode=')) mode = a.split('=')[1].toLowerCase();
+        if (a === '--audit') mode = 'audit';
+        if (a === '--live') mode = 'live';
+        if (a === '--dry-run') mode = 'dry-run';
+        if (a.startsWith('--resume=')) resumeOverride = a.split('=')[1];
+      }
+      return {
+        type: 'apply',
+        url,
+        options: { mode, resumeOverride },
+        label: `Autonomous Job Application (${mode.toUpperCase()}) - ${url}`,
+        slug: `apply-${mode}`
+      };
+    }
+
     // Check if feed mode
     if (firstArg === 'feed' || firstArg === 'for-you' || firstArg === 'foryou') {
       const budget = Number(args[1]) || 1000;
@@ -192,11 +217,40 @@ async function promptMenu() {
   console.log('  2. Scrape Feed / For You (from https://www.linkedin.com/feed/foryou/)');
   console.log('  3. Search LinkedIn Posts (across 10 curated PM/SPM hiring queries)');
   console.log('  4. Global & Remote PM Job Hunter (15 Countries + Visa Sponsorship & Remote)');
+  console.log('  5. Autonomous Job Application Form Filler (Phase 2 - Form Apply with Resume)');
   
   let mainChoice;
-  while (!['1', '2', '3', '4'].includes(mainChoice)) {
-    mainChoice = (await reader.question('\nSelect 1, 2, 3, or 4: ')).trim();
-    if (!['1', '2', '3', '4'].includes(mainChoice)) console.log('Please enter 1, 2, 3, or 4.');
+  while (!['1', '2', '3', '4', '5'].includes(mainChoice)) {
+    mainChoice = (await reader.question('\nSelect 1, 2, 3, 4, or 5: ')).trim();
+    if (!['1', '2', '3', '4', '5'].includes(mainChoice)) console.log('Please enter 1, 2, 3, 4, or 5.');
+  }
+
+  // Mode 5: Autonomous Job Application Form Filler (Phase 2)
+  if (mainChoice === '5') {
+    let jobUrl = '';
+    while (!jobUrl || !jobUrl.startsWith('http')) {
+      jobUrl = (await reader.question('\nEnter job application URL (Greenhouse, Lever, Ashby, Workable, etc.): ')).trim();
+      if (!jobUrl.startsWith('http')) console.log('Please enter a valid URL starting with http:// or https://');
+    }
+
+    console.log('\nSelect execution mode:');
+    console.log('  1. dry-run (Default: Fill all fields, upload resume, verify and screenshot without clicking submit)');
+    console.log('  2. audit   (Inspect form fields, generate fill plan and report without modifying page)');
+    console.log('  3. live    (Fill all fields, upload resume, verify, and click submit application)');
+    
+    const modeChoice = (await reader.question('\nSelect mode [1, 2, or 3, default: 1]: ')).trim();
+    let mode = 'dry-run';
+    if (modeChoice === '2') mode = 'audit';
+    else if (modeChoice === '3') mode = 'live';
+
+    reader.close();
+    return {
+      type: 'apply',
+      url: jobUrl,
+      options: { mode },
+      label: `Autonomous Job Application (${mode.toUpperCase()}) - ${jobUrl}`,
+      slug: `apply-${mode}`
+    };
   }
 
   // Mode 2: Feed / For You
@@ -435,7 +489,8 @@ async function runFeedScraper(page, config) {
   let totalClicks = 0, stableRounds = 0, lastHeight = 0, lastUniqueCount = 0, reason = '';
   console.log(`\nStarting Feed Scraper with target expand budget: ${targetClicks} clicks`);
 
-  for (let round = 1; round <= 2000; round++) {
+  const maxRounds = Math.max(3000, targetClicks * 2);
+  for (let round = 1; round <= maxRounds; round++) {
     const clickedThisRound = await expand(page);
     totalClicks += clickedThisRound;
 
@@ -584,6 +639,24 @@ async function main() {
 
   const page = context.pages()[0] || await context.newPage();
   await stealth.setupStealthPage(page);
+
+  // Phase 2: Autonomous Job Application Pipeline
+  if (config.type === 'apply') {
+    const { applyToJob } = require('./applier');
+    try {
+      const result = await applyToJob(page, config.url, config.options);
+      console.log(`\n============================================================`);
+      console.log(`🎉 Job Application Workflow Finished: ${result.status}`);
+      console.log(`Report: ${result.reportPath}`);
+      if (result.screenshotPath) console.log(`Screenshot: ${result.screenshotPath}`);
+      console.log(`============================================================\n`);
+    } catch (err) {
+      console.error(`\n❌ Application error: ${err.message}`);
+    } finally {
+      await cleanClose();
+    }
+    return;
+  }
 
   let scrapeResult;
   if (config.type === 'feed') {
